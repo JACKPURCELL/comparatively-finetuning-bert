@@ -37,11 +37,10 @@ class ANSI:
         'clear': '\033[2J', }
 
     def __init__(self):
-        self._dict = ANSI.ansi_color if (
-            '--color' in sys.argv) else ANSI.ansi_nocolor
+        self._dict = ANSI.ansi_color 
 
     def switch(self, color: bool):
-        self._dict = ANSI.ansi_color if color else ANSI.ansi_nocolor
+        self._dict = ANSI.ansi_color 
 
     def keys(self):
         return self._dict.keys()

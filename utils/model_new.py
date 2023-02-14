@@ -4,7 +4,7 @@ weights.
 """
 
 import logging
-from typing import Callable, Iterable
+from typing import Callable, Iterable, Iterator
 import tensorboard
 import torch.nn as nn
 import torch
@@ -191,11 +191,10 @@ def distillation(module: nn.Module, num_classes: int,
           validate_interval: int = 1, save: bool = False,
           loader_train: torch.utils.data.DataLoader = None,
           loader_valid: torch.utils.data.DataLoader = None,
-          epoch_fn: Callable[..., None] = None,
         file_path: str = None,
           folder_path: str = None, suffix: str = None,
           writer=None, main_tag: str = 'train', tag: str = '',
-          accuracy_fn: Callable[..., list[float]] = None,
+
           verbose: bool = True, output_freq: str = 'iter', indent: int = 0,
           change_train_eval: bool = True, lr_scheduler_freq: str = 'epoch',
           backward_and_step: bool = True, 
@@ -204,8 +203,8 @@ def distillation(module: nn.Module, num_classes: int,
     r"""Train the model"""
     if epochs <= 0:
         return
-    get_data_fn = get_data_fn or (lambda x: x)
-    forward_fn = forward_fn or module.__call__
+   
+    forward_fn =  module.__call__
 
 
 
@@ -216,12 +215,12 @@ def distillation(module: nn.Module, num_classes: int,
     scaler: torch.cuda.amp.GradScaler = None
 
     best_validate_result = (0.0, float('inf'))
-    if validate_interval != 0:
-        best_validate_result = validate_fn(loader=loader_valid, 
-                                           forward_fn=forward_fn, loss_fn=loss_fn,
-                                           writer=None, tag=tag, _epoch=start_epoch,
-                                           verbose=verbose, indent=indent,  **kwargs)
-        best_acc = best_validate_result[0]
+    best_acc = 0.0
+    # if validate_interval != 0:
+    #     best_validate_result = validate_fn(module=module,loader=loader_valid, 
+    #                                        writer=None, tag=tag, _epoch=start_epoch,
+    #                                        verbose=verbose, indent=indent, num_classes=num_classes,**kwargs)
+    #     best_acc = best_validate_result[0]
 
     params: list[nn.Parameter] = []
     for param_group in optimizer.param_groups:
@@ -249,10 +248,6 @@ def distillation(module: nn.Module, num_classes: int,
     for _epoch in iterator:
         _epoch += 1
         logger.reset()
-        if callable(epoch_fn):
-            activate_params(module, [])
-            epoch_fn(optimizer=optimizer, lr_scheduler=lr_scheduler,
-                     _epoch=_epoch, epochs=epochs, start_epoch=start_epoch)
         loader_epoch = loader_train
         if verbose and output_freq == 'iter':
             header: str = '{blue_light}{0}: {1}{reset}'.format(
@@ -339,8 +334,6 @@ def distillation(module: nn.Module, num_classes: int,
         if mixmatch:
             loss=(logger.meters['loss'].global_avg)
             if writer is not None:
-                from torch.utils.tensorboard import SummaryWriter
-                assert isinstance(writer, SummaryWriter)
                 writer.add_scalars(main_tag='loss/' + main_tag,
                             tag_scalar_dict={tag: loss}, global_step=_epoch + start_epoch)        
         else:
@@ -349,8 +342,6 @@ def distillation(module: nn.Module, num_classes: int,
                     logger.meters['hapi_loss'].global_avg,
                     logger.meters['hapi_acc1'].global_avg)
             if writer is not None:
-                from torch.utils.tensorboard import SummaryWriter
-                assert isinstance(writer, SummaryWriter)
                 writer.add_scalars(main_tag='gt_acc1/' + main_tag,
                             tag_scalar_dict={tag: gt_acc1}, global_step=_epoch + start_epoch)        
                 writer.add_scalars(main_tag='hapi_loss/' + main_tag,
@@ -389,14 +380,8 @@ def dis_validate(module: nn.Module, num_classes: int,
              loader: torch.utils.data.DataLoader,
              print_prefix: str = 'Validate', indent: int = 0,
              verbose: bool = True,
-            
-           
-             loss_fn: Callable[..., torch.Tensor] = None,
              writer=None, main_tag: str = 'valid',
              tag: str = '', _epoch: int = None,
-             accuracy_fn: Callable[..., list[float]] = None,
-                        stu_arch_list=None,
-              tea_forward_fn: Callable[..., torch.Tensor] = None,
              **kwargs) -> tuple[float, float]:
     r"""Evaluate the model.
 
@@ -420,9 +405,7 @@ def dis_validate(module: nn.Module, num_classes: int,
     for data in loader_epoch:
 
         input_ids, token_type_ids, attention_mask, _label, _soft_label, hapi_label  = data
-                
-        _output = forward_fn(input_ids=input_ids,token_type_ids=token_type_ids,attention_mask=attention_mask)
-        loss = loss_fn( _soft_label=_soft_label, _output=_output)
+
                 
         with torch.no_grad():
             _output = forward_fn(input_ids=input_ids,token_type_ids=token_type_ids,attention_mask=attention_mask)

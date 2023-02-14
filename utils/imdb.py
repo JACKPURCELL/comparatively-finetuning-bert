@@ -43,8 +43,7 @@ class IMDB(Dataset):
     @param (torch.device) device: 'cpu' or 'gpu', decides where to store the data tensors
 
     """
-    def __init__(self, input_directory, hapi_info,tokenizer, apply_cleaning, max_tokenization_length,
-                 truncation_method='head-only', split_head_density=0.5, device='cpu'):
+    def __init__(self, input_directory, hapi_info):
        
         self.positive_path = os.path.join(input_directory, 'pos')
         self.positive_files = [f for f in os.listdir(self.positive_path)
@@ -101,7 +100,7 @@ class IMDB(Dataset):
                 example = re.sub(r'<br />', '', example)
                 example = example.lstrip().rstrip()
                 example = re.sub(' +', ' ', example)
-                example = self.tokenizer(example,return_tensors='pt')
+                example = self.tokenizer(example,return_tensors='pt',padding="max_length",max_length=512,truncation=True)
 
                 with open(os.path.join(self.positive_path, 'tokenized_and_encoded', file), mode='wb') as f:
                     pickle.dump(obj=example, file=f)
@@ -126,7 +125,7 @@ class IMDB(Dataset):
                 example = re.sub(r'<br />', '', example)
                 example = example.lstrip().rstrip()
                 example = re.sub(' +', ' ', example)
-                example = self.tokenizer(example,return_tensors='pt')
+                example = self.tokenizer(example,return_tensors='pt',padding="max_length",max_length=512,truncation=True)
 
 
                 with open(os.path.join(self.negative_path, 'tokenized_and_encoded', file), mode='wb') as f:
@@ -140,27 +139,20 @@ class IMDB(Dataset):
     def __getitem__(self, index):
         if index < self.num_positive_examples:
             file = self.positive_files[index]
-            label = torch.tensor(data=self.positive_label, dtype=torch.long).to(self.device)
+            label = torch.tensor(data=self.positive_label, dtype=torch.long)
             with open(os.path.join(self.positive_path, 'tokenized_and_encoded', file), mode='rb') as f:
                 example = pickle.load(file=f)
         elif index >= self.num_positive_examples:
             file = self.negative_files[index-self.num_positive_examples]
-            label = torch.tensor(data=self.negative_label, dtype=torch.long).to(self.device)
+            label = torch.tensor(data=self.negative_label, dtype=torch.long)
             with open(os.path.join(self.negative_path, 'tokenized_and_encoded', file), mode='rb') as f:
                 example = pickle.load(file=f)
         else:
             raise ValueError('Out of range index while accessing dataset')
         
         
-        hapi_id = int(os.path.split('/')[-1].split('.')[0])
-        hapi_label = self.info_lb[hapi_id]
-        hapi_confidence = self.info_conf[hapi_id]
-        other_confidence = (1 - hapi_confidence)/6
-        soft_label = torch.ones(7)*other_confidence
-        soft_label[int(hapi_label)] = hapi_confidence
-        
-        
-        hapi_id = int(file.split('_')[0])*100 + int(file.split('_')[1])
+        file_spilt = re.split('_|.txt',file)
+        hapi_id = int(file_spilt[0])*100 + int(file_spilt[1])
         hapi_label = self.info_lb[hapi_id]
         if hapi_label == -1:
             raise ValueError('Out of range index while accessing dataset')
@@ -169,4 +161,4 @@ class IMDB(Dataset):
         soft_label = torch.ones(2)*other_confidence
         soft_label[int(hapi_label)] = hapi_confidence
 
-        return example.input_ids[0].cuda(), example.token_type_ids[0].cuda(), example.attention_mask[0].cuda(), label, soft_label, hapi_label
+        return example.input_ids[0].cuda(), example.token_type_ids[0].cuda(), example.attention_mask[0].cuda(), label.cuda(), soft_label.cuda(), hapi_label.cuda()

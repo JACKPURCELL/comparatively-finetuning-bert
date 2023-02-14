@@ -17,12 +17,12 @@ from collections.abc import Callable
 class XLNet(nn.Module):
 
     def __init__(self, name: str = 'xlnet-base-cased', num_classes=2, parallel = True, **kwargs):
-
+        super(XLNet, self).__init__()
 
         if parallel:
             self.model = nn.DataParallel(XLNetForSequenceClassification.from_pretrained("xlnet-base-cased", num_labels=num_classes)).cuda()
         else:
-            self.model = XLNetForSequenceClassification.from_pretrained("xlnet-base-cased", num_labels=num_classes,parallel=parallel)
+            self.model = XLNetForSequenceClassification.from_pretrained("xlnet-base-cased", num_labels=num_classes).cuda()
 
         
 
